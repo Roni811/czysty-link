@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Czysty link</title>
+<style>
+:root{--bg:#f3f5f7;--surface:#fff;--ink:#1b2430;--muted:#5d6b7a;--line:#d5dce3;--accent:#0b6b5c;--accent-ink:#fff;--cut:#b3261e;--cutbg:#fbe9e7;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12171c;--surface:#1b222a;--ink:#e8edf2;--muted:#9aa8b6;--line:#303a45;--accent:#4fc3ad;--accent-ink:#06211c;--cut:#ff8a80;--cutbg:#3a1f1d}}
+:root[data-theme="dark"]{--bg:#12171c;--surface:#1b222a;--ink:#e8edf2;--muted:#9aa8b6;--line:#303a45;--accent:#4fc3ad;--accent-ink:#06211c;--cut:#ff8a80;--cutbg:#3a1f1d}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+main{max-width:760px;margin:0 auto;padding:32px 20px 48px}
+h1{font-size:1.9rem;margin:0 0 4px;letter-spacing:-.01em}
+p.lead{margin:0 0 24px;color:var(--muted)}
+label.t{display:block;font-weight:600;margin-bottom:6px}
+textarea{width:100%;min-height:120px;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:14px/1.5 Consolas,"Courier New",monospace;resize:vertical}
+textarea:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+fieldset{border:1px solid var(--line);border-radius:8px;margin:16px 0;padding:12px 14px;background:var(--surface)}
+legend{padding:0 6px;font-weight:600}
+fieldset label{display:block;margin:6px 0;cursor:pointer}
+fieldset small{color:var(--muted);display:block;margin-left:26px}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
+button{font:inherit;font-weight:600;padding:10px 18px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.result{margin-top:8px;display:grid;gap:12px}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.clean{font:14px/1.5 Consolas,"Courier New",monospace;word-break:break-all;margin:0 0 6px}
+.removed{font:13px/1.5 Consolas,"Courier New",monospace;word-break:break-all;color:var(--cut);background:var(--cutbg);padding:2px 6px;border-radius:4px;display:inline-block;margin:0 0 8px}
+.none{color:var(--muted);font-size:14px;margin:0 0 8px}
+.err{color:var(--cut)}
+.item button{padding:6px 12px;font-size:14px}
+#status{min-height:1.5em;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<main>
+<h1>Czysty link</h1>
+<p class="lead">Wklej link, a dostaniesz sam adres bez parametrów śledzących i zbędnych dodatków.</p>
+
+<label class="t" for="in">Linki (jeden pod drugim)</label>
+<textarea id="in" placeholder="https://www.empik.com/lego-72151-pokemon-eevee-lego,p1705565494,zabawki-p?mpShopId=0" spellcheck="false"></textarea>
+
+<fieldset>
+<legend>Co usunąć</legend>
+<label><input type="radio" name="mode" value="all" checked> Wszystko po znaku ? <small>np. ?mpShopId=0 – zostaje sam adres</small></label>
+<label><input type="radio" name="mode" value="track"> Tylko parametry śledzące <small>utm_*, fbclid, gclid, mpShopId, ref, itp. – reszta parametrów zostaje</small></label>
+<label><input type="checkbox" id="hash" checked> Usuń też fragment po # </label>
+</fieldset>
+
+<div class="row">
+<button class="primary" id="go">Wyczyść</button>
+<button id="copyAll">Kopiuj wszystkie</button>
+<button id="clear">Wyczyść pole</button>
+</div>
+<div id="status" role="status" aria-live="polite"></div>
+<div class="result" id="out"></div>
+</main>
+
+<script>
+(function(){
+  var TRACK=/^(utm_.*|fbclid|gclid|gbraid|wbraid|dclid|msclkid|yclid|mc_cid|mc_eid|igshid|ref|ref_src|referrer|source|campaign|mpshopid|_ga|_gl|spm|cmpid|affiliate|aff_id)$/i;
+  var inp=document.getElementById('in'),out=document.getElementById('out'),st=document.getElementById('status');
+  var results=[];
+
+  function mode(){return document.querySelector('input[name=mode]:checked').value;}
+
+  function clean(raw){
+    var s=raw.trim();
+    if(!s) return null;
+    if(!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s='https://'+s;
+    var u;
+    try{u=new URL(s);}catch(e){return {error:true,raw:raw.trim()};}
+    var removed=[];
+    if(mode()==='all'){
+      if(u.search) removed.push(u.search);
+      u.search='';
+    }else{
+      var keep=new URLSearchParams(),dropped=[];
+      u.searchParams.forEach(function(v,k){
+        if(TRACK.test(k)) dropped.push(k+'='+v); else keep.append(k,v);
+      });
+      if(dropped.length) removed.push('?'+dropped.join('&'));
+      u.search=keep.toString();
+    }
+    if(document.getElementById('hash').checked && u.hash){removed.push(u.hash);u.hash='';}
+    return {url:u.toString(),removed:removed.join(' ')};
+  }
+
+  function copy(text,msg){
+    function done(){st.textContent=msg||'Skopiowano.';}
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done,fallback);
+    }else fallback();
+    function fallback(){
+      var t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();
+      try{document.execCommand('copy');done();}catch(e){st.textContent='Nie udało się skopiować – zaznacz i skopiuj ręcznie.';}
+      document.body.removeChild(t);
+    }
+  }
+
+  function render(){
+    out.innerHTML='';results=[];
+    var lines=inp.value.split(/\r?\n/);
+    lines.forEach(function(line){
+      var r=clean(line);
+      if(!r) return;
+      var box=document.createElement('div');box.className='item';
+      if(r.error){
+        var e=document.createElement('p');e.className='clean err';e.textContent='Nieprawidłowy link: '+r.raw;box.appendChild(e);
+      }else{
+        results.push(r.url);
+        var c=document.createElement('p');c.className='clean';c.textContent=r.url;box.appendChild(c);
+        if(r.removed){var d=document.createElement('p');d.className='removed';d.textContent='usunięto: '+r.removed;box.appendChild(d);box.appendChild(document.createElement('br'));}
+        else{var n=document.createElement('p');n.className='none';n.textContent='Nic do usunięcia.';box.appendChild(n);}
+        var b=document.createElement('button');b.textContent='Kopiuj';
+        b.addEventListener('click',function(){copy(r.url,'Skopiowano link.');});
+        box.appendChild(b);
+      }
+      out.appendChild(box);
+    });
+    st.textContent=results.length?('Gotowe: '+results.length+' link(i).'):'Wklej przynajmniej jeden link.';
+  }
+
+  document.getElementById('go').addEventListener('click',render);
+  document.getElementById('copyAll').addEventListener('click',function(){
+    if(!results.length) render();
+    if(results.length) copy(results.join('\n'),'Skopiowano '+results.length+' link(i).');
+  });
+  document.getElementById('clear').addEventListener('click',function(){inp.value='';out.innerHTML='';results=[];st.textContent='';inp.focus();});
+  inp.addEventListener('input',render);
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=mode],#hash'),function(el){el.addEventListener('change',render);});
+})();
+</script>
+</body>
+</html>
